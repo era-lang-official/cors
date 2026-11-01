@@ -1,0 +1,145 @@
+// github.com/era-lang-official/cors
+// Cross-Origin Resource Sharing (CORS) header generation and validation
+
+pub struct CorsHeader {
+    pub name: string,
+    pub val: string,
+}
+
+pub struct CorsConfig {
+    pub allow_all_origins: bool,
+    pub allowed_origins: Vec<string>,
+    pub allowed_methods: Vec<string>,
+    pub allowed_headers: Vec<string>,
+    pub allow_credentials: bool,
+    pub max_age_seconds: i64,
+}
+
+impl CorsConfig {
+    pub fn permissive() -> CorsConfig {
+        let mut methods = Vec::<string>::new();
+        methods.push("GET".to_string());
+        methods.push("POST".to_string());
+        methods.push("PUT".to_string());
+        methods.push("DELETE".to_string());
+        methods.push("PATCH".to_string());
+        methods.push("OPTIONS".to_string());
+
+        let mut headers = Vec::<string>::new();
+        headers.push("Content-Type".to_string());
+        headers.push("Authorization".to_string());
+        headers.push("X-Requested-With".to_string());
+
+        return CorsConfig {
+            allow_all_origins: true,
+            allowed_origins: Vec::<string>::new(),
+            allowed_methods: methods,
+            allowed_headers: headers,
+            allow_credentials: true,
+            max_age_seconds: 86400,
+        };
+    }
+
+    pub fn is_origin_allowed(&self, origin: string) -> bool {
+        if self.allow_all_origins {
+            return true;
+        }
+        let mut idx: usize = 0;
+        while idx < self.allowed_origins.len() {
+            if self.allowed_origins[idx] == origin || self.allowed_origins[idx] == "*" {
+                return true;
+            }
+            idx += 1;
+        }
+        return false;
+    }
+}
+
+pub struct CorsOutcome {
+    pub allowed: bool,
+    pub is_preflight: bool,
+    pub headers: Vec<CorsHeader>,
+}
+
+pub fn handle_cors(config: CorsConfig, origin: string, method: string) -> CorsOutcome {
+    let mut headers = Vec::<CorsHeader>::new();
+    let is_preflight = method == "OPTIONS";
+
+    if origin.len() == 0 {
+        return CorsOutcome {
+            allowed: true,
+            is_preflight,
+            headers,
+        };
+    }
+
+    if !config.is_origin_allowed(origin.clone()) {
+        return CorsOutcome {
+            allowed: false,
+            is_preflight,
+            headers,
+        };
+    }
+
+    if config.allow_all_origins {
+        headers.push(CorsHeader {
+            name: "Access-Control-Allow-Origin".to_string(),
+            val: "*".to_string(),
+        });
+    } else {
+        headers.push(CorsHeader {
+            name: "Access-Control-Allow-Origin".to_string(),
+            val: origin,
+        });
+    }
+
+    if config.allow_credentials {
+        headers.push(CorsHeader {
+            name: "Access-Control-Allow-Credentials".to_string(),
+            val: "true".to_string(),
+        });
+    }
+
+    if is_preflight {
+        let mut m_sb = StringBuilder::new();
+        let mut m_idx: usize = 0;
+        while m_idx < config.allowed_methods.len() {
+            if m_idx > 0 {
+                m_sb.append(", ");
+            }
+            m_sb.append(config.allowed_methods[m_idx].clone());
+            m_idx += 1;
+        }
+        headers.push(CorsHeader {
+            name: "Access-Control-Allow-Methods".to_string(),
+            val: m_sb.to_string(),
+        });
+
+        let mut h_sb = StringBuilder::new();
+        let mut h_idx: usize = 0;
+        while h_idx < config.allowed_headers.len() {
+            if h_idx > 0 {
+                h_sb.append(", ");
+            }
+            h_sb.append(config.allowed_headers[h_idx].clone());
+            h_idx += 1;
+        }
+        headers.push(CorsHeader {
+            name: "Access-Control-Allow-Headers".to_string(),
+            val: h_sb.to_string(),
+        });
+
+        if config.max_age_seconds > 0 {
+            headers.push(CorsHeader {
+                name: "Access-Control-Max-Age".to_string(),
+                val: f"{config.max_age_seconds}",
+            });
+        }
+    }
+
+    return CorsOutcome {
+        allowed: true,
+        is_preflight,
+        headers,
+    };
+}
